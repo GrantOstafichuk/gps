@@ -1,112 +1,191 @@
-#include "tinyxml2.h"
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+#include "implot.h"
+#include <GLFW/glfw3.h>
 #include <iostream>
+#include "GPXReader.h"
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
 
     // read in our gpx file -----
     if (argc != 2)
     {
-        std::cout << "Usage: " << argv[0] << " <filename.gpx>\n";
+        std::cerr << "Usage: " << argv[0] << " <filename.gpx>\n";
         return 1;
     }
 
+    auto trekPoints = readGPXFile(argv[1]);
 
-    tinyxml2::XMLDocument doc;
 
-    tinyxml2::XMLError result = doc.LoadFile(argv[1]);
+    // -------------------------
+    // Initialize GLFW
+    // -------------------------
 
-    if (result != tinyxml2::XML_SUCCESS)
+    double x[] = {
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0
+    };
+
+    double y[] = {
+        0.0,
+        2.0,
+        1.0,
+        4.0,
+        3.0
+    };
+
+    if (!glfwInit())
     {
-        std::cout << "Count not read the file\n";
+        std::cerr << "Failed to initialize GLFW\n";
         return 1;
     }
 
-    std::cout << "FILE READED\n";
-    // -----
+    // Tell GLFW which version of OpenGL we want.
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    // check that it is a .gpx file -----
-    tinyxml2::XMLElement* gpx = doc.FirstChildElement("gpx");
+    // -------------------------
+    // Create window
+    // -------------------------
 
-    if (gpx == nullptr)
+    GLFWwindow* window = glfwCreateWindow(
+        1280,
+        720,
+        "GPX Reader",
+        nullptr,
+        nullptr
+    );
+
+    if (window == nullptr)
     {
-        std::cerr << "No <gpx> element found\n";
+        std::cerr << "Failed to create GLFW window\n";
+        glfwTerminate();
         return 1;
     }
-    // ------
 
-    // extract all the important data from our doc
-    auto author = gpx->Attribute("creator");
-    auto version = gpx->Attribute("version");
+    glfwMakeContextCurrent(window);
 
-    std::cout << "Author " << author << "\n";
-    std::cout << "version " << version << "\n";
-    // -----
+    // Enable VSync
+    glfwSwapInterval(1);
 
-    // waypoint count-----
-    auto waypoints = gpx->ChildElementCount() - 2;
-    std::cout << "Child element count of gpx" << waypoints << "\n";
-    // ------
+    // -------------------------
+    // Initialize Dear ImGui
+    // -------------------------
 
-    // remove meta data -----
-    gpx->DeleteChild(gpx->FirstChild());
-    // ----------------------
+    IMGUI_CHECKVERSION();
 
-    // all waypoints in a list -----
-    while (waypoints > 0)
+    ImGui::CreateContext();
+
+    ImGuiIO& io = ImGui::GetIO();
+    (void)io;
+
+    ImGui::StyleColorsDark();
+
+    // GLFW backend
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+
+    // OpenGL backend
+    ImGui_ImplOpenGL3_Init("#version 330");
+
+    // -------------------------
+    // Initialize ImPlot
+    // -------------------------
+
+    ImPlot::CreateContext();
+
+    // -------------------------
+    // Main loop
+    // -------------------------
+
+    while (!glfwWindowShouldClose(window))
     {
-        auto next = gpx->FirstChildElement();
-        std::cout << next->FirstAttribute()->Value() << "\n";
-        gpx->DeleteChild(gpx->FirstChild());
+        glfwPollEvents();
 
-        waypoints--;
-    }
-    // -----------------------------
+        // Start ImGui frame
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
 
-    // trkseg -----
-    // should be 3 name, sourse and trkpt
-    auto trk = gpx->FirstChild();
-    std::cout << "Elements under trk " << trk->ChildElementCount() << "\n";
+        ImGui::NewFrame();
 
-    // remove name and src
-    trk->DeleteChild(trk->FirstChild());
-    trk->DeleteChild(trk->FirstChild());
+        // -------------------------
+        // Our GUI
+        // -------------------------
 
-    // trek point count
-    auto trkseg = trk->FirstChild();
-    std::cout << "Number of trekpoints " << trkseg->ChildElementCount() << "\n";
-    // --------------------------
+        ImGui::Begin("GPX Reader");
 
-    // make a list of all our trek points ------
-    auto trkpt = trkseg->FirstChildElement();
-    while (trkpt)
-    {
+        ImGui::Text("Hello from Dear ImGui!");
 
-        // lets print our trek points first
-        std::cout << trkpt->Value() << "\n";
-
-        auto child = trkpt->FirstChildElement();
-
-        while (child)
+        if (ImPlot::BeginPlot("Test Plot"))
         {
-            std::cout << "  " << trkpt->DoubleAttribute("lat");
-            std::cout << "  " << trkpt->DoubleAttribute("lon");
-            std::cout << "  " << child->Value();
+            ImPlot::PlotLine(
+                "Data",
+                x,
+                y,
+                5
+            );
 
-            if (child->GetText())
-            {
-                std::cout << " = " << child->GetText();
-            }
-
-            std::cout << "\n";
-
-            child = child->NextSiblingElement();
+            ImPlot::EndPlot();
         }
 
-        trkpt = trkpt->NextSiblingElement();
-    }
-    // -----------------------------------------
+        ImGui::End();
 
+        // -------------------------
+        // Rendering
+        // -------------------------
+
+        ImGui::Render();
+
+        int displayWidth;
+        int displayHeight;
+
+        glfwGetFramebufferSize(
+            window,
+            &displayWidth,
+            &displayHeight
+        );
+
+        glViewport(
+            0,
+            0,
+            displayWidth,
+            displayHeight
+        );
+
+        glClearColor(
+            0.1f,
+            0.1f,
+            0.1f,
+            1.0f
+        );
+
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        ImGui_ImplOpenGL3_RenderDrawData(
+            ImGui::GetDrawData()
+        );
+
+        glfwSwapBuffers(window);
+    }
+
+    // -------------------------
+    // Cleanup
+    // -------------------------
+
+    ImPlot::DestroyContext();
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+
+    ImGui::DestroyContext();
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
 
     return 0;
 }
