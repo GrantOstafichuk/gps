@@ -7,7 +7,7 @@
 #include <vector>
 
 
-std::vector<TrekPoint> readGPXFile(char filename[])
+std::vector<TrekPoint> readGPXFile(const char filename[])
 {
 
     std::vector<TrekPoint> res;
@@ -116,14 +116,23 @@ std::vector<TrekPoint> readGPXFile(char filename[])
     }
     // -----------------------------------------
 
-    // last lets just write this to a csv file so we can plot it with python, for now...
-    std::ofstream file("track.csv");
+    
+
+    // ----------------------------------------------------------------------------------
+
+    return res;
+}
+
+void exportCSV(const char filename[], std::vector<TrekPoint> trkPts)
+{
+    // simple code to export to .csv file
+    std::ofstream file(filename);
 
     file << "latitude,longitude,elevation\n";
 
     file << std::setprecision(15);
 
-    for (const auto& point : res)
+    for (const auto& point : trkPts)
     {
         file << point.latitude << ","
             << point.longitude << ","
@@ -131,9 +140,4 @@ std::vector<TrekPoint> readGPXFile(char filename[])
     }
 
     file.close();
-
-    // ----------------------------------------------------------------------------------
-
-
-    return res;
 }

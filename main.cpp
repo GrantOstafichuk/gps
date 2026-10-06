@@ -4,7 +4,26 @@
 #include "implot.h"
 #include <GLFW/glfw3.h>
 #include <iostream>
+#include <string>
+#include <array>
 #include "GPXReader.h"
+
+namespace imgui_panel
+{
+    bool open_gpx = false;
+    bool export_to_csv = false;
+    std::string filename = "";
+    float distance = 0.f;
+
+};
+
+namespace implot_data
+{
+    std::vector<double> longitudes;
+    std::vector<double> latitudes;
+    std::vector<double> elevations;
+    std::vector<double> y;
+};
 
 int main(int argc, char *argv[])
 {
@@ -18,27 +37,23 @@ int main(int argc, char *argv[])
 
     auto trekPoints = readGPXFile(argv[1]);
 
+    // we have 2 key graphs
+    // 1.) an elevation plot
+    // 2.) our route plot (this i'd like to add colour too to emphasize the plot size)
+    
+    double i {};
 
-    // -------------------------
-    // Initialize GLFW
-    // -------------------------
+    for(auto const point : trekPoints)
+    {
+        implot_data::longitudes.push_back(point.longitude);
+        implot_data::latitudes.push_back(point.latitude);
+        implot_data::elevations.push_back(point.elevation);
+        implot_data::y.push_back(i++);
+    }
+    
+    
 
-    double x[] = {
-        0.0,
-        1.0,
-        2.0,
-        3.0,
-        4.0
-    };
-
-    double y[] = {
-        0.0,
-        2.0,
-        1.0,
-        4.0,
-        3.0
-    };
-
+    // initialize GLFW
     if (!glfwInit())
     {
         std::cerr << "Failed to initialize GLFW\n";
@@ -50,13 +65,11 @@ int main(int argc, char *argv[])
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    // -------------------------
-    // Create window
-    // -------------------------
+    // create window ------
 
     GLFWwindow* window = glfwCreateWindow(
         1280,
-        720,
+        1280,
         "GPX Reader",
         nullptr,
         nullptr
@@ -74,9 +87,7 @@ int main(int argc, char *argv[])
     // Enable VSync
     glfwSwapInterval(1);
 
-    // -------------------------
-    // Initialize Dear ImGui
-    // -------------------------
+    //ImGui and ImPlot set up -----
 
     IMGUI_CHECKVERSION();
 
@@ -93,15 +104,10 @@ int main(int argc, char *argv[])
     // OpenGL backend
     ImGui_ImplOpenGL3_Init("#version 330");
 
-    // -------------------------
-    // Initialize ImPlot
-    // -------------------------
 
     ImPlot::CreateContext();
 
-    // -------------------------
-    // Main loop
-    // -------------------------
+    // Main loop -------------------
 
     while (!glfwWindowShouldClose(window))
     {
@@ -113,25 +119,79 @@ int main(int argc, char *argv[])
 
         ImGui::NewFrame();
 
-        // -------------------------
-        // Our GUI
-        // -------------------------
+        // GUI and plots ------------------
 
         ImGui::Begin("GPX Reader");
 
         ImGui::Text("Hello from Dear ImGui!");
 
-        if (ImPlot::BeginPlot("Test Plot"))
+        ImGui::Spacing();
+        if (ImGui::CollapsingHeader("Open GPX file"))
+        {
+            static std::array<char, 64> buffer;
+            ImGui::InputText("(.gpx) file", buffer.data(), buffer.size());
+
+            imgui_panel::open_gpx = ImGui::Button("Load");
+            
+            if (imgui_panel::open_gpx){
+
+                imgui_panel::filename = buffer.data();
+                trekPoints = readGPXFile((imgui_panel::filename).c_str());
+            } 
+
+        }
+
+        ImGui::Spacing();
+        if(ImGui::CollapsingHeader("Export to CSV file"))
+        {
+            static std::array<char, 64> buff;
+            ImGui::InputText("(.cvs) file name", buff.data(), buff.size());
+
+            imgui_panel::export_to_csv = ImGui::Button("Export");
+
+            if(imgui_panel::export_to_csv)
+            {
+                std::string filename = buff.data();
+                filename += ".csv";
+                exportCSV(filename.c_str(), trekPoints);
+            }
+        }
+
+        // our spec object to change plot style
+        ImPlotSpec routeSpec;
+        routeSpec.LineColor = {0.0f, 1.0f, 0.5f, 1.0f};
+
+        ImPlotSpec elevationSpec;
+        elevationSpec.LineColor = {1.0f, 0.07f, 0.576f, 1.f};
+        // ----------------------------------------
+
+        if (ImPlot::BeginPlot("Route map"))
         {
             ImPlot::PlotLine(
-                "Data",
-                x,
-                y,
-                5
+                "Coordinates",
+                implot_data::longitudes.data(),
+                implot_data::latitudes.data(),
+                implot_data::longitudes.size(),
+                routeSpec
             );
 
             ImPlot::EndPlot();
         }
+
+        if (ImPlot::BeginPlot("Elevation Plot"))
+        {
+            ImPlot::PlotLine(
+                "elevation (m)",
+                implot_data::y.data(),
+                implot_data::elevations.data(),
+                implot_data::elevations.size(),
+                elevationSpec
+            );
+
+            ImPlot::EndPlot();
+        }
+
+
 
         ImGui::End();
 
